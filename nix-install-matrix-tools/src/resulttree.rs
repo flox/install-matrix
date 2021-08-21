@@ -63,7 +63,7 @@ pub fn parse_results(top: FileTreeNode) -> TestEnvironments {
         }
 
         // Traverse from ./log-output/ in to ./log-output/test-environment
-        for mut environmentnode in environmentdirectories.into_iter() {
+        for environmentnode in environmentdirectories.into_iter() {
             envs.environments.push(test_environment_from_directory(environmentnode));
         }
     } else {
@@ -95,7 +95,7 @@ fn test_environment_from_directory(mut environment_node: DirectoryNode) -> TestE
             println!("unexpected files: {:?}", extra_files);
         }
 
-        for mut scenario_directory_node in test_scenarios_directories {
+        for scenario_directory_node in test_scenarios_directories {
             env.runs.insert(
                 scenario_directory_node.name.clone(),
                 test_run_from_directory(scenario_directory_node)
@@ -137,7 +137,7 @@ fn test_run_from_directory(mut scenario_directory_node: DirectoryNode) -> TestRu
                 println!("unexpected files: {:?}", extra_files);
             }
 
-            for mut test_run_directory in scenario_test_result_dirs {
+            for test_run_directory in scenario_test_result_dirs {
                 run.tests.insert(
                     test_run_directory.name.clone(),
                     test_result_from_directory(test_run_directory)

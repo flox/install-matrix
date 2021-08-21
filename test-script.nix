@@ -27,7 +27,7 @@ set -o pipefail
 runtest() {
     testFn=$1
 
-    local testdir="$TESTDIR/$testFn"
+    local testdir="$TESTDIR/tests/$testFn"
     mkdir -p "$testdir"
 
     start=$(date '+%s')
@@ -122,10 +122,13 @@ main ${pkgs.lib.concatStringsSep " " (builtins.attrNames testScripts)}
     }
     trap finish EXIT
 
-    cp ${mkVagrantfile name imageConfig} ./Vagrantfile
+    mkdir log-results
 
-    echo "${name}" > ./image-name
-    echo "${installScript.name}" > ./install-method
+    cp ${mkVagrantfile name imageConfig} ./Vagrantfile
+    cp ./Vagrantfile ./log-results/
+
+    echo "${name}" > ./log-results/image-name
+    echo "${installScript.name}" > ./log-results/install-method
 
     (
       vagrant up --provider=libvirt
@@ -157,26 +160,23 @@ main ${pkgs.lib.concatStringsSep " " (builtins.attrNames testScripts)}
         shift
         vagrant ssh -- "$@" ./testscript 2>&1 \
           | sed -e "s/^/${name}-test-$name    /"
-        mkdir -p "./$name"
-        vagrant ssh -- cat ./nix-test-matrix-log.tar | tar -xC "./$name"
-        mv ./"$name"/nix-test-matrix-log/* ./"$name"
-        rmdir ./"$name"/nix-test-matrix-log
+        mkdir -p "./log-results/test-results/$name"
+        vagrant ssh -- cat ./nix-test-matrix-log.tar | tar -xC "./log-results/test-results/$name"
       }
 
       export VAGRANT_PREFER_SYSTEM_BIN=1
       export -f runtest
 
     ${pkgs.lib.strings.concatStringsSep "\n" (
-      pkgs.lib.mapAttrsToList (name: value: "runtest ${name} ${value}") 
+      pkgs.lib.mapAttrsToList (name: value: "runtest ${name} ${value}")
       (filter loginFilter imageConfig.loginMethods) )}
-    ) 2>&1 | tee ./run-log
+    ) 2>&1 | tee ./log-results/run-log
 
-    mkdir -p "$destdir"
-    cp -r ./* "$destdir"
+    mv ./log-results "$destdir"
   '';
 
   mkImageFetchScript = imagename:
-    shellcheckedScript "fetch-image" ''
+    shellcheckedScript "fetch-image-${imagename}" ''
         #!/bin/bash
         set -euo pipefail
         echo "--- Fetching ${imagename}"
@@ -194,15 +194,14 @@ in shellcheckedScript "run-tests.sh"
 
   PATH="${pkgs.coreutils}/bin/:${pkgs.findutils}/bin/$PATH"
 
-  export destdir
   destdir=$(realpath "$1")
   mkdir -p "$destdir"
   shift
 
-  set +e
+  set +eu
 
   echo "Pre-fetching images"
-  cat <<EOF | xargs -L 1 -P 2 bash
+  cat <<EOF | grep "$2" | xargs -L 1 -P 2 bash
   ${pkgs.lib.concatStringsSep "\n"
   (pkgs.lib.lists.unique (builtins.map (image: mkImageFetchScript image.config.image)
     casesToRun
@@ -210,12 +209,11 @@ in shellcheckedScript "run-tests.sh"
   EOF
 
   echo "Running tests"
-  set +u
-  cat <<EOF | grep "$2" | xargs -L 1 -P 2 bash
+  cat <<EOF | grep "$2" | grep "$3" | xargs -L 1 -P 2 bash
   ${pkgs.lib.concatStringsSep "\n"
   (builtins.map (case:
     let cmd = mkTestScript case.config.install case.name case.config;
-    in "${cmd} \"$destdir/${case.name}/${case.config.install.name}\"") casesToRun
+    in "${cmd} \"$destdir/${case.config.install.name}-${case.name}\"") casesToRun
     )}
   EOF
 ''

@@ -1,4 +1,3 @@
-#[macro_use]
 extern crate structopt;
 extern crate regex;
 extern crate nix_install_matrix_tools;
@@ -189,7 +188,7 @@ fn results_table(envs: TestEnvironments) -> ResultTable {
         for (scenario, run) in environment.runs {
             scenario_names.insert(scenario.clone());
 
-            for (case, mut test) in run.tests.into_iter() {
+            for (case, test) in run.tests.into_iter() {
                 testcase_names.insert(case.clone());
                 let id = TestResultIdentifier {
                     environment: environment.name.clone(),
