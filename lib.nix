@@ -1,6 +1,5 @@
-{ installMethodFilter ? null, imageNameFilter ? null }:
+{ pkgs ? import <nixpkgs>{}, installMethodFilter ? null, imageNameFilter ? null, loginMethodFilter ? null, testFilter ? null }:
 rec {
-  pkgs = import <nixpkgs> {};
   srcs = import ./matrix.nix;
 
   shellcheckedScript = name: text:
@@ -13,25 +12,33 @@ rec {
     '';
 
   testCases = installMethods: images:
-    pkgs.lib.flatten ((pkgs.lib.flip builtins.map installMethods)
-      (installMethod:
+    pkgs.lib.flatten ((pkgs.lib.flip pkgs.lib.mapAttrsToList installMethods)
+      (installMethodName: installMethodValue:
         (pkgs.lib.flip pkgs.lib.mapAttrsToList images)
           (imageName: imageConfig: {
-            installMethod = installMethod;
+            installMethod = {
+              name= installMethodName;
+              script= installMethodValue;
+            };
             imageName = imageName;
             imageConfig = imageConfig;
           })
     ));
 
-  casesToRun = testCases
-    (builtins.filter
-      (installer: if installMethodFilter == null then true
-        else installer.name == installMethodFilter) srcs.installScripts)
-      filteredImages;
+  casesToRun = testCases filteredInstall filteredImages;
+
+  filteredInstall = pkgs.lib.filterAttrs (name: _: if installMethodFilter == null then true
+    else builtins.match installMethodFilter name == null) srcs.installScripts;
+
+  filteredLogins = pkgs.lib.filterAttrs (name: _: if loginMethodFilter == null then true
+    else builtins.match loginMethodFilter name == null) srcs.loginMethods;
+
+  testScripts = pkgs.lib.filterAttrs (name: _: if testFilter == null then true
+    else builtins.match testFilter name == null) srcs.testScripts;
 
   filteredImages = (pkgs.lib.filterAttrs
     (name: _: if imageNameFilter == null then true
-    else name == imageNameFilter) srcs.images);
+    else pkgs.lib.strings.hasPrefix imageNameFilter name) srcs.images);
 
   squidConfig = pkgs.writeText "squid.conf"
     ''

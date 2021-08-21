@@ -1,21 +1,79 @@
-{ installMethodFilter ? null, imageNameFilter ? null }:
+{ pkgs ? import <nixpkgs>{}, installMethodFilter ? null, imageNameFilter ? null, loginMethodFilter ? null }:
 let
+  config = with builtins; {
+    installMethodFilter = null;
+    imageNameFilter = null;
+    loginMethodFilter = null;
+    testFilter = null;
+  } // fromTOML (readFile ./config.toml);
+  inherit (config) installMethodFilter imageNameFilter loginMethodFilter testFilter;
+
   lib = import ./lib.nix {
-    inherit installMethodFilter imageNameFilter;
+    inherit pkgs installMethodFilter imageNameFilter loginMethodFilter testFilter;
   };
 
-  inherit (lib) pkgs shellcheckedScript filteredImages
-    casesToRun;
+  inherit (lib) shellcheckedScript filteredImages casesToRun testScripts;
 
-  testScript = name: details: shellcheckedScript "test.sh"
-    (builtins.readFile ./tests.sh);
+  testScript = name: details: shellcheckedScript "test.sh" ''
+#!/usr/bin/env bash
+export PS4=' ''${BASH_SOURCE}::''${FUNCNAME[0]}::$LINENO '
+set -u
+set -o pipefail
+
+runtest() {
+    testFn=$1
+
+    local testdir="$TESTDIR/tests/$testFn"
+    mkdir -p "$testdir"
+
+    start=$(date '+%s')
+    echo "Starting: $testFn"
+    echo "PATH: $PATH"
+    (
+        set -e
+        "$testFn"
+    ) 2>&1 | tee "$testdir/log" | sed 's/^/    /'
+    exitcode=$?
+    end=$(date '+%s')
+    duration=$((end - start))
+    echo "$exitcode" > "$testdir/exitcode"
+    echo "$duration" > "$testdir/duration"
+
+    echo "Finishing: $testFn, duration:$duration result:$exitcode"
+}
+
+main() {
+    readonly TESTDIR=./nix-test-matrix-log
+    rm -rf "$TESTDIR"
+    mkdir "$TESTDIR"
+
+    (
+        for i in "$@" ; do
+            runtest "$i"
+        done
+    )
+
+    tar -cf ./nix-test-matrix-log.tar "$TESTDIR"
+}
+${pkgs.lib.concatStringsSep "\n"
+(pkgs.lib.mapAttrsToList (name: value:
+"${name}(){
+  ${value}
+}
+    ") testScripts
+  )}
+main ${pkgs.lib.concatStringsSep " " (builtins.attrNames testScripts)}
+'';
 
   mkVagrantfile = name: details: pkgs.writeText "Vagrantfile" ''
     Vagrant.configure("2") do |config|
       config.vm.box = "${details.image}"
+      ${pkgs.lib.concatStringsSep "\n" (map (item: "
+      config.vm.provision \"file\", source: \"${item.dst}\", destination: \"${item.dst}\"
+      ") details.preLoad)}
       config.vm.provision "shell", inline: <<-SHELL
         set +x
-    ${details.preInstall}
+        ${details.preInstall}
       SHELL
       config.vm.synced_folder ".", "/vagrant", disabled: true
       config.vm.box_check_update = false
@@ -31,19 +89,12 @@ let
   '';
 
   mkTestScript = installScript: name: imageConfig: shellcheckedScript "run-${installScript.name}-${name}.sh" ''
-    #!/bin/sh
-
-    echo "--- Test script for ${installScript.name}-${name}"
+    #!/usr/bin/env bash
+    set -eu
 
     PATH=${pkgs.vagrant}/bin/:${pkgs.coreutils}/bin/:$PATH
 
-    printf "\\n\\n\\n\\n\\n"
-    echo "Test script for ${installScript.name}-${name}"
-    printf "\\n\\n\\n\\n\\n"
-
-    set -eu
-
-    destdir=$1
+    destdir="$1"
     shift
 
     scratch=$(mktemp -d -t tmp.XXXXXXXXXX)
@@ -52,7 +103,11 @@ let
     }
     trap finish EXIT
 
-    cp ./nix.${imageConfig.system}.tar.xz "$scratch/"
+    # TODO: use rsync to support folder structures not just individual files
+    ${pkgs.lib.concatStringsSep "\n"
+      (builtins.map (load: "cp ${load.src} \"$scratch/${load.dst}\"")
+      imageConfig.preLoad
+    )}
 
     cd "$scratch"
 
@@ -71,15 +126,12 @@ let
     echo "${installScript.name}" > ./log-results/install-method
 
     (
-      vagrant up --provider=virtualbox
+      vagrant up --provider=libvirt
 
-
-      vagrant ssh -- tee nix.tar.xz < ./nix.${imageConfig.system}.tar.xz > /dev/null
-
-      vagrant ssh -- tee install < ${shellcheckedScript installScript.name installScript.script}
+      vagrant ssh -- tee install < ${shellcheckedScript installScript.name installScript.script} >/dev/null
       vagrant ssh -- chmod +x install
 
-      vagrant ssh -- tee testscript < ${testScript name imageConfig}
+      vagrant ssh -- tee testscript < ${testScript name imageConfig} >/dev/null
       vagrant ssh -- chmod +x testscript
 
       ${if (imageConfig.hostReqs or {}).httpProxy or false then ''
@@ -92,7 +144,9 @@ let
       '' }
 
       vagrant ssh -- ./install 2>&1 \
-        | sed -e "s/^/${name}-install    /"
+        | tee ./log-results/install-log | sed -e "s/^/${name}-install    /"
+      installexitcode=''${PIPESTATUS[0]}
+      echo "$installexitcode" > ./log-results/install-exitcode
 
       set +e
 
@@ -105,12 +159,19 @@ let
         vagrant ssh -- cat ./nix-test-matrix-log.tar | tar -xC "./log-results/test-results/$name"
       }
 
-      runtest login bash --login
-      runtest login-interactive bash --login -i
-      runtest interactive bash -i
-      runtest ssh
+      export VAGRANT_PREFER_SYSTEM_BIN=1
+      export -f runtest
+
+      set -x
+      #shellcheck disable=SC1083
+      #cat <<EOF | ${pkgs.parallel}/bin/parallel --lb --noswap --memfree 1G -L 1 -j 4 {}
+      ${pkgs.lib.strings.concatStringsSep "\n" (
+        pkgs.lib.mapAttrsToList (name: value: "runtest ${name} ${value}") lib.filteredLogins)}
+    #EOF
+      set +x
     ) 2>&1 | tee ./log-results/run-log
 
+    mkdir -p "$destdir"
     mv ./log-results "$destdir"
   '';
 
@@ -122,22 +183,23 @@ let
         echo "--- Fetching ${imagename}"
 
 
-        set -euxo pipefail
+        set -euo pipefail
 
         PATH=${pkgs.vagrant}/bin/:${pkgs.coreutils}/bin/:${pkgs.gnugrep}/bin/:${pkgs.curl}/bin/:$PATH
 
         if ! vagrant box list | grep -q "${imagename}"; then
-          vagrant box add "${imagename}" --provider=virtualbox
+          vagrant box add "${imagename}" --provider=libvirt
         fi
       '';
 in shellcheckedScript "run-tests.sh"
 ''
   #!/bin/sh
 
-  set -eux
+  set -eu
 
   PATH="${pkgs.coreutils}/bin/:$PATH"
 
+  export destdir
   destdir=$(realpath "$1")
   mkdir -p "$destdir"
   shift
@@ -153,12 +215,12 @@ in shellcheckedScript "run-tests.sh"
   EOF
 
   echo "Running tests"
-
-  cat <<EOF | ${pkgs.findutils}/bin/xargs -L 1 -P 4 bash
+  set +u
+  cat <<EOF | grep "$2" | ${pkgs.findutils}/bin/xargs -L 1 -P 4 bash
   ${pkgs.lib.concatStringsSep "\n"
   (builtins.map (case:
     let cmd = mkTestScript case.installMethod case.imageName case.imageConfig;
-    in "${cmd} \"$destdir/${case.installMethod.name}-${case.imageName}\"") casesToRun
+    in "${cmd} \"$destdir/${case.imageName}/${case.installMethod.name}\"") casesToRun
     )}
   EOF
 ''

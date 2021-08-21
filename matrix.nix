@@ -1,44 +1,46 @@
-{
-  installScripts = [
-    {
-      name = "install-default";
-      script = ''
-        #!/bin/sh
+rec {
+  # (images x install) VMs
+  # (login x tests) in each VM
 
-        set -eux
+  installScripts = {
+    install-default = ''
+      #!/bin/sh
+      set -eu
+      sudo dpkg -i flox.deb
+    '';
+    install-verbose = ''
+      #!/bin/sh
+      set -eux
+      sudo dpkg -i flox.deb
+    '';
+  };
 
-        tar -xf ./nix.tar.xz
-        mv ./nix-* nix
-        ./nix/install
-      '';
-    }
+  install= {
+    install-default = ''
+      #!/bin/sh
+      set -eu
+      sudo dpkg -i flox.deb
+    '';
+    install-verbose = ''
+      #!/bin/sh
+      set -eux
+      sudo dpkg -i flox.deb
+    '';
+  };
 
-    {
-      name = "install-force-no-daemon";
-      script = ''
-        #!/bin/sh
+  testScripts = {
+    "test.sh" = ''
+      #!/bin/sh
+      flox --help
+    '';
+  };
 
-        set -eux
-
-        tar -xf ./nix.tar.xz
-        mv ./nix-* nix
-        ./nix/install --no-daemon
-      '';
-    }
-
-    {
-      name = "install-force-daemon";
-      script = ''
-        #!/bin/sh
-
-        set -eux
-
-        tar -xf ./nix.tar.xz
-        mv ./nix-* nix
-        ./nix/install  --daemon
-      '';
-    }
-  ];
+  loginMethods = {
+    login = "bash --login";
+    login-interactive = "bash --login -i";
+    interactive = "bash -i";
+    ssh = ""; # all of the above do SSH and then spaw appropriate shell
+  };
 
   images = {
     "macos-sierra" = {
@@ -58,7 +60,7 @@
     "arch" = {
       image = "generic/arch";
       preInstall = ''
-        packman -S --no-confirm rsync
+        pacman -S --noconfirm rsync
       '';
       system = "x86_64-linux";
     };
@@ -155,8 +157,11 @@
       image = "debian/stretch64";
       preInstall = ''
         apt-get update
-        apt-get install -y curl
+        apt-get install -y curl mount
       '';
+
+      install = install;
+      preLoad = [ { src = "./flox.deb"; dst = "flox.deb";} ];
       system = "x86_64-linux";
     };
 
@@ -164,8 +169,9 @@
       image = "debian/jessie64";
       preInstall = ''
         apt-get update
-        apt-get install -y curl
+        apt-get install -y curl mount
       '';
+      preLoad = [ { src = "./flox.deb"; dst = "flox.deb";} ];
       system = "x86_64-linux";
     };
 
@@ -180,6 +186,7 @@
         iptables -A OUTPUT -p tcp --dport 80 -j DROP
         iptables -A OUTPUT -p tcp --dport 443 -j DROP
       '';
+      preLoad = [ { src = ./flox-bad.deb; dst = "flox.deb";} ];
       system = "x86_64-linux";
     };
 
