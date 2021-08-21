@@ -1,6 +1,6 @@
-{ pkgs ? import <nixpkgs>{}, installMethodFilter ? null, imageNameFilter ? null, loginMethodFilter ? null, testFilter ? null }:
+{ pkgs ? import <nixpkgs>{}, installFilter ? null, imageFilter ? null, loginFilter ? null, testFilter ? null , matrix ? import ./matrix.nix}:
 rec {
-  srcs = import ./matrix.nix;
+  srcs = matrix;
 
   shellcheckedScript = name: text:
     pkgs.runCommand "shellchecked-${name}" {
@@ -11,34 +11,29 @@ rec {
       cp $src $out
     '';
 
-  testCases = installMethods: images:
-    pkgs.lib.flatten ((pkgs.lib.flip pkgs.lib.mapAttrsToList installMethods)
-      (installMethodName: installMethodValue:
-        (pkgs.lib.flip pkgs.lib.mapAttrsToList images)
-          (imageName: imageConfig: {
-            installMethod = {
-              name= installMethodName;
-              script= installMethodValue;
+  testCases = filteredImages:
+    pkgs.lib.flatten ((pkgs.lib.flip pkgs.lib.mapAttrsToList filteredImages)
+    ( imageName: imageConfig:
+    ( pkgs.lib.flip pkgs.lib.mapAttrsToList (filter installFilter
+        (if imageConfig?install then imageConfig.install else throw "${imageName} has no install methods" )
+    ))
+      ( installName: installScript: rec {
+          name = imageName;
+          config = imageConfig // {
+            install = {
+             name = installName;
+             script = installScript;
             };
-            imageName = imageName;
-            imageConfig = imageConfig;
-          })
-    ));
+          };
+        }
+      )
+  ));
 
-  casesToRun = testCases filteredInstall filteredImages;
+  casesToRun = let a = testCases (filter imageFilter srcs);
+    in builtins.trace a a;
 
-  filteredInstall = pkgs.lib.filterAttrs (name: _: if installMethodFilter == null then true
-    else builtins.match installMethodFilter name == null) srcs.installScripts;
-
-  filteredLogins = pkgs.lib.filterAttrs (name: _: if loginMethodFilter == null then true
-    else builtins.match loginMethodFilter name == null) srcs.loginMethods;
-
-  testScripts = pkgs.lib.filterAttrs (name: _: if testFilter == null then true
-    else builtins.match testFilter name == null) srcs.testScripts;
-
-  filteredImages = (pkgs.lib.filterAttrs
-    (name: _: if imageNameFilter == null then true
-    else pkgs.lib.strings.hasPrefix imageNameFilter name) srcs.images);
+  filter = filterLit: f: pkgs.lib.filterAttrs (name: _: if filterLit == null then true
+    else builtins.isList (builtins.match ".*${filterLit}.*" name)) f;
 
   squidConfig = pkgs.writeText "squid.conf"
     ''

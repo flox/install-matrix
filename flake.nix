@@ -8,7 +8,7 @@
   in
   {
 
-    packages.x86_64-linux.script = pkgs.callPackage ./test-script.nix {};
+    packages.x86_64-linux.script = pkgs.callPackage ./default.nix {inherit pkgs;};
 
     defaultPackage.x86_64-linux = self.packages.x86_64-linux.script;
 
