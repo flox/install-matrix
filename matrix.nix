@@ -1,3 +1,4 @@
+{pkgs ? import <nixpkgs>{}, mkTestScript ? pkgs.callPackage ./test-script.nix }:
 let
   debian_install = {
     install-default = ''
@@ -31,11 +32,10 @@ let
     interactive = "bash -i";
     ssh = ""; # all of the above do SSH and then spawn appropriate shell
   };
-in {
 
   filters = {
-    imageFilter = "debian";
-    installFilter = "default";
+    imageFilter = "(debian|ubuntu).*";
+    #installFilter = "default";
   };
 
   matrix = builtins.mapAttrs (_: v: { inherit loginMethods testScripts; } // v)
@@ -221,4 +221,6 @@ in {
     system = "x86_64-linux";
   };
 };
-}
+in mkTestScript {
+    inherit pkgs filters matrix;
+  }

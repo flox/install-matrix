@@ -33,7 +33,7 @@ rec {
     in builtins.trace a a;
 
   filter = filterLit: f: pkgs.lib.filterAttrs (name: _: if filterLit == null then true
-    else builtins.isList (builtins.match ".*${filterLit}.*" name)) f;
+    else builtins.isList (builtins.match "${filterLit}" name)) f;
 
   squidConfig = pkgs.writeText "squid.conf"
     ''

@@ -3,7 +3,7 @@ and executed in specific scenarios to ensure they all pass. A
 prescriptive test failure indicates a serious problem which needs to
 be addressed.
 
-The Nix Install Matrix test suite is _descriptive_, *not*
+The Install Matrix test suite is _descriptive_, *not*
 prescriptive.
 
 The goal of the test matrix is to _describe_ the current state of the
@@ -21,18 +21,18 @@ degraded the installation process.
 
 ---
 
-# Nix Test Matrix
+# Test Matrix
 
 # Background
 
-The Nix installer interacts with the host operating system directly,
+The installers interacts with the host operating system directly,
 and this exposes it to many more opportunities to fail or behave
 funny. Different operating systems will also be able to support
-different sets of Nix’s features.
+different sets of features.
 
 # Problem
 
-Testing the Nix installer is complicated and involves spawning a lot
+Testing the an installer is complicated and involves spawning a lot
 of VMs to validate it, and a lot of different things to check. The
 current testing strategy is fairly ad-hoc and has inconsistent
 coverage. Additionally, validating changes is slow, manual,
@@ -43,28 +43,27 @@ error-prone, and no fun.
 A test matrix which automatically spawns VMs of many different
 operating systems, flavors, and versions.
 
-Each VM can be subjected to many tests from basic "does the
-installer create a working Nix?” to “Is the Nix install multi-user?"
-to more complicated checks like sandboxing, internal network proxies,
-and more.
+Each VM can be subjected to many tests from basic "does the installer create a
+working install?” to “Is the install multi-user?" to more complicated checks
+like mounts, sandboxing, internal network proxies, and more.
 
 
 ## Hacking and Implementation Notes
 
-./matrix.nix defines a list of ways to install Nix and a list of
-images with Vagrant boxes to try. The list of tests to run is the
-cartesian product of these two lists.
+./matrix.nix defines a list of ways to install software and a list of images
+with Vagrant boxes to try. The list of tests to run is the cartesian product of
+these two lists.
 
-New test cases should be added by creating either a new image
-definition, or a new install definition. The actual tests executed are
-defined by ./test.sh and all test cases run the exact same test suite.
+New test cases should be added by creating either a new image definition, or a
+new install definition. The actual tests executed are defined defined in
+./matrix.nix and all test cases run the exact same test suite.
 
 For example, if you wanted to add a test to see how the Nix installer
 handles when / is all chmod'd to 777, you could add the following
 image:
 
 ```
-  images = {
+  matrix = {
     "debian-9-chmod-777" = {
       image = "debian/stretch64";
       preInstall = ''
@@ -79,23 +78,17 @@ image:
 
 Run all the tests:
 
-    nix-build ./test-script.nix && ./result ./output-directory
-
-Run the tests with all the distros for only the `install-default`
-installation method:
-
-    nix-build ./test-script.nix --argstr installMethodFilter install-default
-    ./result
+    nix-build matrix.nix && ./result ./output-directory
 
 Run the tests with all the install methods, on only Arch Linux:
 
-    nix-build ./test-script.nix --argstr imageNameFilter arch
-    ./result
+    nix-build ./matrix.nix
+    ./result ./output-directory arch
 
 Run only one test, of Arch Linux and the default installation method:
 
-    nix-build ./test-script.nix --argstr imageNameFilter arch --argstr installMethodFilter install-default
-    ./result
+    nix-build ./matrix.nix
+    ./result ./output-directory arch default
 
 ## Generating reports
 
