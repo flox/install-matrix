@@ -1,5 +1,13 @@
 {pkgs ? import <nixpkgs>{}, mkTestScript ? pkgs.callPackage ./test-script.nix }:
 let
+  alpine_install = {
+    install-default = ''
+      #!/bin/sh
+      set -eux
+      echo hi
+      xz -d < flox.tar.xz | sudo tar xvf - -C /
+    '';
+  };
   debian_install = {
     install-default = ''
       #!/bin/sh
@@ -34,7 +42,7 @@ let
   };
 
   filters = {
-    imageFilter = "(debian|ubuntu).*";
+    imageFilter = "alpine-3.8";
     #installFilter = "default";
   };
 
@@ -65,8 +73,14 @@ let
   "alpine-3-8" = {
     image = "generic/alpine38";
     preInstall = ''
-      apk --no-cache add curl
+      set -xe
+      sudo apk add curl xz strace
+      mount
+      sudo apk add findmnt
+      findmnt
     '';
+    preLoad = [ { src = "./flox.tar.xz"; dst = "flox.tar.xz";} ];
+    install = alpine_install;
     system = "x86_64-linux";
   };
 
