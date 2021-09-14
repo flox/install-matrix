@@ -1,5 +1,13 @@
 {pkgs ? import <nixpkgs>{}, mkTestScript ? pkgs.callPackage ./test-script.nix }:
 let
+  alpine_install = {
+    install-default = ''
+      #!/bin/sh
+      set -x
+      xz -d < flox.tar.xz | sudo tar xvf - -C "/"
+      echo finished installing
+    '';
+  };
   debian_install = {
     install-default = ''
       #!/bin/sh
@@ -16,6 +24,17 @@ let
   };
 
   testScripts = {
+    floxadmin = ''
+      echo start test
+      export FLOXADM_DEBUG=1
+      sudo floxadm start
+      sleep 20
+      flox --version
+      sleep 20
+      sudo floxadm stop
+      echo start finish test
+    '';
+
     help = ''
       #!/bin/sh
       flox --help
@@ -34,8 +53,19 @@ let
   };
 
   filters = {
-    imageFilter = "(debian|ubuntu).*";
-    #installFilter = "default";
+    imageFilter = "alpine-3-14";
+    testFilter = "floxadmin";
+  };
+
+  "alpine-default" = {
+    #image = "generic/alpine314";
+    preInstall = ''
+      set -xe
+      sudo apk add curl xz findmnt
+    '';
+    preLoad = [ { src = "./flox.tar.xz"; dst = "flox.tar.xz";} ];
+    install = alpine_install;
+    system = "x86_64-linux";
   };
 
   matrix = builtins.mapAttrs (_: v: { inherit loginMethods testScripts; } // v)
@@ -62,36 +92,14 @@ let
     system = "x86_64-linux";
   };
 
-  "alpine-3-8" = {
-    image = "generic/alpine38";
-    preInstall = ''
-      apk --no-cache add curl
-    '';
-    system = "x86_64-linux";
+  "alpine-3-14" = alpine-default // {
+    image = "generic/alpine314";
   };
-
-  "alpine-3-7" = {
-    image = "generic/alpine37";
-    preInstall = ''
-      apk --no-cache add curl
-    '';
-    system = "x86_64-linux";
+  "alpine-3-13" = alpine-default // {
+    image = "generic/alpine313";
   };
-
-  "alpine-3-6" = {
-    image = "generic/alpine36";
-    preInstall = ''
-      apk --no-cache add curl
-    '';
-    system = "x86_64-linux";
-  };
-
-  "alpine-3-5" = {
-    image = "generic/alpine35";
-    preInstall = ''
-      apk --no-cache add curl
-    '';
-    system = "x86_64-linux";
+  "alpine-3-12" = alpine-default // {
+    image = "generic/alpine312";
   };
 
   "fedora-28" = {
