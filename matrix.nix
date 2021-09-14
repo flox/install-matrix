@@ -1,28 +1,25 @@
 {pkgs ? import <nixpkgs>{}, mkTestScript ? pkgs.callPackage ./test-script.nix }:
 let
-  debian_install = {
+  simple_install = {
     install-default = ''
       #!/bin/sh
-      set -eux
-      sudo dpkg -i flox.deb
+      echo install default
     '';
-    double-install = ''
+    install-sleep = ''
       #!/bin/sh
-      set -eux
-      sudo dpkg -i flox.deb &
-      sudo dpkg -i flox.deb
-      wait
+      echo install
+      sleep 5
     '';
   };
 
   testScripts = {
-    help = ''
+    hello = ''
       #!/bin/sh
-      flox --help
+      echo hello world
     '';
     version = ''
       #!/bin/sh
-      flox --version
+      echo --version
     '';
   };
 
@@ -34,64 +31,55 @@ let
   };
 
   filters = {
-    imageFilter = "(debian|ubuntu).*";
-    #installFilter = "default";
+    imageFilter = "alpine-3-14";
+    #testFilter = "hello";
   };
 
-  matrix = builtins.mapAttrs (_: v: { inherit loginMethods testScripts; } // v)
+  "alpine-default" = {
+    #image = "generic/alpine314";
+    preInstall = ''
+      set -xe
+      sudo apk add curl xz findmnt
+    '';
+    install = simple_install;
+    preLoad = [ { src = ./README.md; dst = "README.md";} ];
+    system = "x86_64-linux";
+  };
+  preLoad = [ { src = ./README.md; dst = "README.md";} ];
+
+  matrix = builtins.mapAttrs (_: v: { inherit loginMethods testScripts preLoad; } // v)
   {
-  "macos-sierra" = {
-    # Sketchy :)
-    image = "jhcook/macos-sierra";
-    preInstall = "";
-    system = "x86_64-darwin";
-  };
+  # "macos-sierra" = {
+  #   # Sketchy :)
+  #   image = "jhcook/macos-sierra";
+  #   preInstall = "";
+  #   system = "x86_64-darwin";
+  # };
 
-  "macos-highsierra" = {
-    # Sketchy :)
-    image = "monsenso/macos-10.13";
-    preInstall = "";
-    system = "x86_64-darwin";
-  };
+  # "macos-highsierra" = {
+  #   # Sketchy :)
+  #   image = "monsenso/macos-10.13";
+  #   preInstall = "";
+  #   system = "x86_64-darwin";
+  # };
 
   "arch" = {
     image = "generic/arch";
     preInstall = ''
       pacman -S --noconfirm rsync
     '';
+    install = simple_install;
     system = "x86_64-linux";
   };
 
-  "alpine-3-8" = {
-    image = "generic/alpine38";
-    preInstall = ''
-      apk --no-cache add curl
-    '';
-    system = "x86_64-linux";
+  "alpine-3-14" = alpine-default // {
+    image = "generic/alpine314";
   };
-
-  "alpine-3-7" = {
-    image = "generic/alpine37";
-    preInstall = ''
-      apk --no-cache add curl
-    '';
-    system = "x86_64-linux";
+  "alpine-3-13" = alpine-default // {
+    image = "generic/alpine313";
   };
-
-  "alpine-3-6" = {
-    image = "generic/alpine36";
-    preInstall = ''
-      apk --no-cache add curl
-    '';
-    system = "x86_64-linux";
-  };
-
-  "alpine-3-5" = {
-    image = "generic/alpine35";
-    preInstall = ''
-      apk --no-cache add curl
-    '';
-    system = "x86_64-linux";
+  "alpine-3-12" = alpine-default // {
+    image = "generic/alpine312";
   };
 
   "fedora-28" = {
@@ -99,6 +87,7 @@ let
     preInstall = ''
       yum install curl
     '';
+    install = simple_install;
     system = "x86_64-linux";
   };
 
@@ -107,6 +96,7 @@ let
     preInstall = ''
       yum install curl
     '';
+    install = simple_install;
     system = "x86_64-linux";
   };
 
@@ -115,6 +105,7 @@ let
     preInstall = ''
       yum install curl
     '';
+    install = simple_install;
     system = "x86_64-linux";
   };
 
@@ -123,6 +114,7 @@ let
     preInstall = ''
       yum install curl
     '';
+    install = simple_install;
     system = "x86_64-linux";
   };
 
@@ -131,6 +123,7 @@ let
     preInstall = ''
       emerge curl
     '';
+    install = simple_install;
     system = "x86_64-linux";
   };
 
@@ -139,6 +132,7 @@ let
     preInstall = ''
       yum --assumeyes install curl
     '';
+    install = simple_install;
     system = "x86_64-linux";
   };
 
@@ -147,17 +141,17 @@ let
     preInstall = ''
       yum --assumeyes install curl
     '';
+    install = simple_install;
     system = "x86_64-linux";
   };
 
   "debian-9" = {
     image = "debian/stretch64";
-    preLoad = [ { src = "./flox.deb"; dst = "flox.deb";} ];
     preInstall = ''
       apt-get update
       apt-get install -y curl mount
     '';
-    install = debian_install;
+    install = simple_install;
     system = "x86_64-linux";
   };
 
@@ -167,8 +161,7 @@ let
       apt-get update
       apt-get install -y curl mount
     '';
-    preLoad = [ { src = "./flox.deb"; dst = "flox.deb";} ];
-    install = debian_install;
+    install = simple_install;
     system = "x86_64-linux";
   };
 
@@ -183,8 +176,7 @@ let
       iptables -A OUTPUT -p tcp --dport 80 -j DROP
       iptables -A OUTPUT -p tcp --dport 443 -j DROP
     '';
-    preLoad = [ { src = "./flox.deb"; dst = "flox.deb";} ];
-    install = debian_install;
+    install = simple_install;
     system = "x86_64-linux";
   };
 
@@ -194,8 +186,7 @@ let
       apt-get update
       apt-get install -y curl
     '';
-    preLoad = [ { src = "./flox.deb"; dst = "flox.deb";} ];
-    install = debian_install;
+    install = simple_install;
     system = "x86_64-linux";
   };
 
@@ -205,8 +196,7 @@ let
       apt-get update
       apt-get install -y curl
     '';
-    preLoad = [ { src = "./flox.deb"; dst = "flox.deb";} ];
-    install = debian_install;
+    install = simple_install;
     system = "x86_64-linux";
   };
 
@@ -216,8 +206,7 @@ let
       apt-get update
       apt-get install -y curl
     '';
-    preLoad = [ { src = "./flox.deb"; dst = "flox.deb";} ];
-    install = debian_install;
+    install = simple_install;
     system = "x86_64-linux";
   };
 };
