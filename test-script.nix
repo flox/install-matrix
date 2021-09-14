@@ -53,9 +53,8 @@ main() {
 
     (
         for i in "$@" ; do
-            runtest "$i" &
+            runtest "$i"
         done
-        wait
     )
 
     tar -cf ./nix-test-matrix-log.tar "$TESTDIR"
@@ -209,7 +208,7 @@ in shellcheckedScript "run-tests.sh"
   EOF
 
   echo "Running tests"
-  cat <<EOF | grep "$2" | grep "$3" | xargs -L 1 -P 2 bash
+  cat <<EOF | grep "$2" | grep "$3" | xargs -L 1 -P 1 bash
   ${pkgs.lib.concatStringsSep "\n"
   (builtins.map (case:
     let cmd = mkTestScript case.config.install case.name case.config;
