@@ -1,12 +1,7 @@
-{pkgs ? import <nixpkgs>{}, mkTestScript ? pkgs.callPackage ./test-script.nix }:
+{pkgs ? import <nixpkgs>{}, mkTestScript ? pkgs.callPackage ./test-script.nix
+, flox-installer }:
+
 let
-
-  floxHydra = pkgs.lib.mapAttrs' (name: value: {
-      inherit name;
-      value = if value ? x86_64-linux then value.x86_64-linux else value;
-  }) (import <floxHydra> { });
-
-  flox-installer = floxHydra.flox-installer;
   flox-installer-tar = "${flox-installer}/tar/flox.tar";
   flox-installer-deb = "${flox-installer}/deb/flox.deb";
   flox-installer-rpm = "${flox-installer}/rpm/flox.rpm";
