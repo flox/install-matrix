@@ -1,24 +1,51 @@
 {pkgs ? import <nixpkgs>{}, mkTestScript ? pkgs.callPackage ./test-script.nix }:
 let
+
+  floxHydra = pkgs.lib.mapAttrs' (name: value: {
+      inherit name;
+      value = if value ? x86_64-linux then value.x86_64-linux else value;
+  }) (import <floxHydra> { });
+
+  flox-installer = floxHydra.flox-installer;
+  flox-installer-tar = "${flox-installer}/tar/flox.tar";
+  flox-installer-deb = "${flox-installer}/deb/flox.deb";
+  flox-installer-rpm = "${flox-installer}/rpm/flox.rpm";
+
   alpine_install = {
     install-default = ''
       #!/bin/sh
       set -x
-      xz -d < flox.tar.xz | sudo tar xvf - -C "/"
+      sudo tar xvf ${flox-installer-tar} -C "/"
       echo finished installing
     '';
   };
+
   debian_install = {
     install-default = ''
       #!/bin/sh
       set -eux
-      sudo dpkg -i flox.deb
+      sudo dpkg -i ${flox-installer-deb}
     '';
     double-install = ''
       #!/bin/sh
       set -eux
-      sudo dpkg -i flox.deb &
-      sudo dpkg -i flox.deb
+      sudo dpkg -i ${flox-installer-deb} &
+      sudo dpkg -i ${flox-installer-deb}
+      wait
+    '';
+  };
+
+  fedora_install = {
+    install-default = ''
+      #!/bin/sh
+      set -eux
+      sudo yum install ${flox-installer-rpm}
+    '';
+    double-install = ''
+      #!/bin/sh
+      set -eux
+      sudo yum install ${flox-installer-rpm} &
+      sudo yum install ${flox-installer-rpm}
       wait
     '';
   };
@@ -63,7 +90,7 @@ let
       set -xe
       sudo apk add curl xz findmnt
     '';
-    preLoad = [ { src = "./flox.tar.xz"; dst = "flox.tar.xz";} ];
+    preLoad = [ { src = flox-installer-tar; dst = "flox.tar";} ];
     install = alpine_install;
     system = "x86_64-linux";
   };
@@ -160,7 +187,7 @@ let
 
   "debian-9" = {
     image = "debian/stretch64";
-    preLoad = [ { src = "./flox.deb"; dst = "flox.deb";} ];
+    preLoad = [ { src = flox-installer-deb; dst = "flox.deb";} ];
     preInstall = ''
       apt-get update
       apt-get install -y curl mount
@@ -175,7 +202,7 @@ let
       apt-get update
       apt-get install -y curl mount
     '';
-    preLoad = [ { src = "./flox.deb"; dst = "flox.deb";} ];
+    preLoad = [ { src = flox-installer-deb; dst = "flox.deb";} ];
     install = debian_install;
     system = "x86_64-linux";
   };
@@ -191,7 +218,7 @@ let
       iptables -A OUTPUT -p tcp --dport 80 -j DROP
       iptables -A OUTPUT -p tcp --dport 443 -j DROP
     '';
-    preLoad = [ { src = "./flox.deb"; dst = "flox.deb";} ];
+    preLoad = [ { src = flox-installer-deb; dst = "flox.deb";} ];
     install = debian_install;
     system = "x86_64-linux";
   };
@@ -202,7 +229,7 @@ let
       apt-get update
       apt-get install -y curl
     '';
-    preLoad = [ { src = "./flox.deb"; dst = "flox.deb";} ];
+    preLoad = [ { src = flox-installer-deb; dst = "flox.deb";} ];
     install = debian_install;
     system = "x86_64-linux";
   };
@@ -213,7 +240,7 @@ let
       apt-get update
       apt-get install -y curl
     '';
-    preLoad = [ { src = "./flox.deb"; dst = "flox.deb";} ];
+    preLoad = [ { src = flox-installer-deb; dst = "flox.deb";} ];
     install = debian_install;
     system = "x86_64-linux";
   };
@@ -224,7 +251,7 @@ let
       apt-get update
       apt-get install -y curl
     '';
-    preLoad = [ { src = "./flox.deb"; dst = "flox.deb";} ];
+    preLoad = [ { src = flox-installer-deb; dst = "flox.deb";} ];
     install = debian_install;
     system = "x86_64-linux";
   };
