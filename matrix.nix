@@ -13,13 +13,18 @@ let
   };
 
   testScripts = {
-    hello = ''
+    upgrade = ''
       #!/bin/sh
-      echo hello world
-    '';
-    version = ''
-      #!/bin/sh
-      echo --version
+      set -euxo pipefail
+      verify_install() {
+        sudo systemctl status nix-daemon
+        sudo nix-collect-garbage -d
+        readlink /usr/bin/nix
+        nix profile list
+      }
+      verify_install
+      sudo dnf -y --nogpgcheck --cacheonly localinstall flox2.rpm
+      verify_install
     '';
   };
 
@@ -31,8 +36,10 @@ let
   };
 
   filters = {
-    imageFilter = "alpine-3-14";
-    #testFilter = "hello";
+    installFilter = null;
+    imageFilter = "fedora-35";
+    loginFilter = "login";
+    testFilter = null;
   };
 
   "alpine-default" = {
@@ -80,6 +87,19 @@ let
   };
   "alpine-3-12" = alpine-default // {
     image = "generic/alpine312";
+  };
+
+  "fedora-35" = {
+    image = "generic/fedora35";
+    preInstall = "";
+    install = {
+      default = ''
+        #!/bin/sh
+        sudo dnf -y --nogpgcheck --cacheonly localinstall flox.rpm
+      '';
+    };
+    preLoad = [ { src = ./flox.rpm; dst = "flox.rpm";} { src = ./flox2.rpm; dst = "flox2.rpm";}];
+    system = "x86_64-linux";
   };
 
   "fedora-28" = {
