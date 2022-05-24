@@ -18,7 +18,11 @@ let
   inherit (config) testFilter loginFilter;
   inherit (lib) shellcheckedScript filter casesToRun;
 
-  testScript = testScripts: shellcheckedScript "test.sh" ''
+  testScript = testScripts: shellcheckedScript "test.sh"
+    (let
+      filteredTests = filter testFilter testScripts;
+    in
+    ''
 #!/usr/bin/env bash
 export PS4=' ''${BASH_SOURCE}::''${FUNCNAME[0]}::$LINENO '
 set -u
@@ -64,10 +68,10 @@ ${pkgs.lib.concatStringsSep "\n"
 "${name}(){
   ${value}
 }
-    ") (filter testFilter testScripts)
+    ") filteredTests
   )}
-main ${pkgs.lib.concatStringsSep " " (builtins.attrNames testScripts)}
-'';
+main ${pkgs.lib.concatStringsSep " " (builtins.attrNames filteredTests)}
+'');
 
   mkVagrantfile = name: details: pkgs.writeText "Vagrantfile" ''
     Vagrant.configure("2") do |config|
