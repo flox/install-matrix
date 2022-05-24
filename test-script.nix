@@ -195,7 +195,6 @@ in shellcheckedScript "run-tests.sh"
 
   destdir=$(realpath "$1")
   mkdir -p "$destdir"
-  shift
 
   set +eu
 
