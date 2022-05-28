@@ -82,6 +82,34 @@ let
     image = "generic/alpine312";
   };
 
+  "fedora-35" = {
+    image = "generic/fedora35";
+    preInstall = "";
+    install = {
+      default = ''
+        #!/bin/sh
+        # sudo dnf -y --nogpgcheck --cacheonly localinstall flox.rpm
+        sudo rpm -i flox.rpm
+      '';
+    };
+    preLoad = [ { src = ./flox.rpm; dst = "flox.rpm";} { src = ./flox2.rpm; dst = "flox2.rpm";}];
+    system = "x86_64-linux";
+  };
+
+  "ubuntu-21.10" = {
+    image = "generic/ubuntu2110";
+    box_version = "3.6.14";
+    preInstall = "";
+    install = {
+      default = ''
+        #!/bin/sh
+        sudo dpkg -i flox.deb
+      '';
+    };
+    preLoad = [ { src = ./flox.deb; dst = "flox.deb";} { src = ./flox2.deb; dst = "flox2.deb";}];
+    system = "x86_64-linux";
+  };
+
   "fedora-28" = {
     image = "generic/fedora28";
     preInstall = ''
